@@ -157,9 +157,8 @@ ActivityManagerNative.getDefault()会返回AMS的远程Binder代理对象Activit
  
  	IApplicationThread.scheduleLaunchActivity() <- ActivityStackSupervisor.realStartActivityLocked() <- ActivityStackSupervisor.startSpecificActivityLocked() <- ActivityStack.makeVisibleAndRestartIfNeeded() <- ActivityStack.ensureActivitiesVisibleLocked() <- ActivityStarter.startActivityUnchecked() <- ActivityStarter.startActivityLocked() <- ActivityStarter.startActivityMayWait() <- ActivityManagerService.startActivity()
  	
- 讲真的，我在找这条调用链的时候内心是崩溃的，因为几乎每个方法的参数中都带有 'IBinder token' 这个参数。。。而调用的时候都是传入ActivityRecord.appToken，这个appToken变量是在ActivityRecord的构造函数中被初始化的，因此我们需要找到整个调用链中哪一步new了一个ActivityRecord对象。随着在我心中奔腾的草泥马的数量越来越多，突然。。突然一个神圣的方法出现了--**ActivityStarter.startActivityLocked()**：
+ 这条调用链的时候内心是崩溃的，因为几乎每个方法的参数列表都无比的长。。。而对于token来说，调用的时候都是传入ActivityRecord.appToken，这个appToken变量是在ActivityRecord的构造函数中被初始化的，因此我们需要找到整个调用链中哪一步new了一个ActivityRecord对象。随着在我心中奔腾的草泥马的数量越来越多，突然。。突然一个神圣的方法出现了--**ActivityStarter.startActivityLocked()**：
  
- 		//当我把这个长到令人发指的参数列表一个个看完的时候，我仿佛看见了前方的曙光，木有token！！
  	    final int startActivityLocked(IApplicationThread caller, Intent intent, Intent ephemeralIntent,
             String resolvedType, ActivityInfo aInfo, ResolveInfo rInfo,
             IVoiceInteractionSession voiceSession, IVoiceInteractor voiceInteractor,
