@@ -96,7 +96,7 @@ ActivityManagerNative.getDefault()会返回AMS的远程Binder代理对象Activit
     
 上面第四个参数r.token便是我们要找的对象，可以看到它是通过ActivityClientRecord实例r传递过来的。在继续分析函数调用链之前插一句，大家还记得上面我们提到的finish()过程中最后调用的performDestroyActivity方法吧，有木有发现这两个方法的名字很套路，其实就像上面说的，整个AMS和ActivityThread针对Activity的IPC通信过程就是一个套路，这里我们很容易就能猜到performLaunchActivity这个方法是startActivity()过程的一个步骤，事实也是如此，无非就是:
 
-	Activity.startActivity() -> ActivityManagerNative -> ActivityManagerProxy -> ActivityManagerService -> ApplicationThreadProxy -> ApplicationThread -> ActivityThread.H -> ActivityThread.performLaunchActivity()
+Activity.startActivity() -> ActivityManagerNative -> ActivityManagerProxy -> ActivityManagerService -> ApplicationThreadProxy -> ApplicationThread -> ActivityThread.H -> ActivityThread.performLaunchActivity()
 
 到这里，第一个问题就解决了，mToken是在我们调用startActivity启动某个Activity时在attach方法中被赋值的。
 
@@ -153,11 +153,11 @@ ActivityManagerNative.getDefault()会返回AMS的远程Binder代理对象Activit
  
  **ActivityManagerService**
  
- 这里我们就回到了AMS进程中，这里先列出AMS这端内部的函数调用链：
- 
- 	IApplicationThread.scheduleLaunchActivity() <- ActivityStackSupervisor.realStartActivityLocked() <- ActivityStackSupervisor.startSpecificActivityLocked() <- ActivityStack.makeVisibleAndRestartIfNeeded() <- ActivityStack.ensureActivitiesVisibleLocked() <- ActivityStarter.startActivityUnchecked() <- ActivityStarter.startActivityLocked() <- ActivityStarter.startActivityMayWait() <- ActivityManagerService.startActivity()
+ 这里我们就回到了AMS进程中，这里先列出AMS这端内部的函数调用链（其实整条调用链中还是存在两次IPC，即AMS通知source Activity pause和source Activity通知AMS我已经paused了，下面黑体省略部分即为发生在App进程中的过程）：
+
+IApplicationThread.scheduleLaunchActivity() <- ActivityStackSupervisor.realStartActivityLocked() <- ActivityStackSupervisor.startSpecificActivityLocked() <- ActivityStack.makeVisibleAndRestartIfNeeded() <- ActivityStack.ensureActivitiesVisibleLocked() <- ActivityStack.activityPausedLocked() <- ActivityManagerService.activityPaused() **<- ...schedulePauseActivity... <-** ActivityStack.startPausingLocked() <- ActivityStack.resumeTopActivityInnerLocked() <- ActivityStack.resumeTopActivityUncheckedLocked() <- ActivityStackSupervisor.resumeFocusedStackTopActivityLocked() <- ActivityStarter.startActivityUnchecked() <- ActivityStarter.startActivityLocked() <- ActivityStarter.startActivityMayWait() <- ActivityManagerService.startActivity()
  	
- 这条调用链的时候内心是崩溃的，因为几乎每个方法的参数列表都无比的长。。。而对于token来说，调用的时候都是传入ActivityRecord.appToken，这个appToken变量是在ActivityRecord的构造函数中被初始化的，因此我们需要找到整个调用链中哪一步new了一个ActivityRecord对象。随着在我心中奔腾的草泥马的数量越来越多，突然。。突然一个神圣的方法出现了--**ActivityStarter.startActivityLocked()**：
+我在看这条调用链的时候内心是崩溃的，因为几乎每个方法的参数列表都无比的长。。。而对于token来说，调用的时候都是传入ActivityRecord.appToken，这个appToken变量是在ActivityRecord的构造函数中被初始化的，因此我们需要找到整个调用链中哪一步new了一个ActivityRecord对象。随着在我心中奔腾的草泥马的数量越来越多，突然。。突然一个神圣的方法出现了--**ActivityStarter.startActivityLocked()**：
  
  	    final int startActivityLocked(IApplicationThread caller, Intent intent, Intent ephemeralIntent,
             String resolvedType, ActivityInfo aInfo, ResolveInfo rInfo,
